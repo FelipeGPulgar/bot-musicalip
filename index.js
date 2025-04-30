@@ -2,7 +2,6 @@ const { Client, GatewayIntentBits, Collection, REST, Routes, ActivityType, Event
 const { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus, entersState, NoSubscriberBehavior } = require('@discordjs/voice');
 const playdl = require('play-dl');
 const ytdl = require('ytdl-core');
-const youtubeDl = require('youtube-dl-exec');  // Agregamos youtube-dl-exec
 const fs = require('fs');
 const path = require('path');
 const { Readable } = require('stream');
@@ -117,7 +116,7 @@ client.on('interactionCreate', async interaction => {
   }
 });
 
-// Actualizar la función playUrl para manejar URLs de Spotify
+// Actualizar la función playUrl para eliminar youtube-dl-exec
 async function playUrl(interaction, url) {
   try {
     const guildId = interaction.guild.id;
@@ -204,30 +203,7 @@ async function playUrl(interaction, url) {
         console.error('Error con play-dl:', playDlError);
       }
 
-      // Intentar con youtube-dl-exec
-      try {
-        console.log('Intentando con youtube-dl-exec...');
-        const audioStream = await createYouTubeDlStream(url);
-
-        const resource = createAudioResource(audioStream, {
-          inputType: 'arbitrary',
-          inlineVolume: true
-        });
-
-        if (resource.volume) {
-          resource.volume.setVolume(0.6);
-        }
-
-        musicConnection.player.play(resource);
-        musicConnection.playing = true;
-
-        console.log(`Reproduciendo con youtube-dl-exec: ${url}`);
-        return `🎵 Reproduciendo: **${url}**`;
-      } catch (youtubeDlError) {
-        console.error('Error con youtube-dl-exec:', youtubeDlError);
-      }
-
-      // Intentar con ytdl-core
+      // Intentar con ytdl-core como respaldo
       try {
         console.log('Intentando con ytdl-core...');
         const stream = ytdl(url, {
