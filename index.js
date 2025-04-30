@@ -175,115 +175,89 @@ async function playUrl(interaction, url) {
       }
     }
 
-    // Eliminar la lógica de búsqueda alternativa para URLs de Spotify
-    if (url.includes('spotify.com')) {
-      try {
-        const spotifyData = await playdl.spotify(url);
-
-        if (spotifyData.type === 'track') {
-          const song = {
-            title: spotifyData.name,
-            url: spotifyData.url,
-            thumbnail: spotifyData.thumbnail.url,
-            duration: spotifyData.durationInSec,
-            requestedBy: interaction.user.tag
-          };
-
-          musicConnection.queue.push(song);
-          if (!musicConnection.currentItem) {
-            playNext(guildId);
-            return `🎵 Reproduciendo: **${song.title}**`;
-          } else {
-            return `🎵 Añadido a la cola: **${song.title}**`;
-          }
-        } else if (spotifyData.type === 'playlist') {
-          for (const track of spotifyData.fetched_tracks) {
-            const song = {
-              title: track.name,
-              url: track.url,
-              thumbnail: track.thumbnail.url,
-              duration: track.durationInSec,
-              requestedBy: interaction.user.tag
-            };
-            musicConnection.queue.push(song);
-          }
-
-          if (!musicConnection.currentItem) {
-            playNext(guildId);
-            return `🎵 Reproduciendo la playlist: **${spotifyData.name}**`;
-          } else {
-            return `🎵 Añadida la playlist a la cola: **${spotifyData.name}**`;
-          }
-        }
-      } catch (error) {
-        console.error('Error al procesar URL de Spotify:', error);
-        return '❌ No se pudo procesar la URL de Spotify. Por favor, verifica que sea válida.';
-      }
-    }
-
-    // ...código existente para manejar URLs de YouTube...
     try {
-      console.log(`Obteniendo info del video: ${url}`);
-      
-      // Intentamos obtener la información del video con youtube-dl-exec primero
-      let song;
-      
+      console.log(`Intentando reproducir: ${url}`);
+
+      // Intentar con play-dl primero
       try {
-        const videoInfo = await getVideoInfo(url);
-        song = {
-          title: videoInfo.title,
-          url: videoInfo.url,
-          thumbnail: videoInfo.thumbnail,
-          duration: videoInfo.duration || 0,
-          requestedBy: interaction.user.tag,
-        };
-        console.log('Información del video obtenida con youtube-dl-exec');
-      } catch (youtubeDlError) {
-        console.error('Error al obtener info con youtube-dl:', youtubeDlError);
-        
-        // Si falla youtube-dl, intentar con ytdl-core
-        try {
-          console.log('Intentando con ytdl-core como respaldo...');
-          const videoInfo = await ytdl.getInfo(url);
-          song = {
-            title: videoInfo.videoDetails.title,
-            url: videoInfo.videoDetails.video_url,
-            thumbnail: videoInfo.videoDetails.thumbnails[0]?.url || 'https://i.ytimg.com/vi/default/default.jpg',
-            duration: parseInt(videoInfo.videoDetails.lengthSeconds) || 0,
-            requestedBy: interaction.user.tag,
-          };
-          console.log('Información del video obtenida con ytdl-core');
-        } catch (ytdlError) {
-          console.error('Error al obtener info con ytdl-core:', ytdlError);
-          
-          // Último intento con play-dl
-          console.log('Intentando con play-dl como último recurso...');
-          const songInfo = await playdl.video_info(url);
-          song = {
-            title: songInfo.video_details.title,
-            url: songInfo.video_details.url,
-            thumbnail: songInfo.video_details.thumbnails[0].url,
-            duration: songInfo.video_details.durationInSec,
-            requestedBy: interaction.user.tag,
-          };
+        console.log('Intentando con play-dl...');
+        const { stream, type } = await playdl.stream(url, {
+          quality: 0,
+          discordPlayerCompatibility: true
+        });
+
+        const resource = createAudioResource(stream, {
+          inputType: type,
+          inlineVolume: true
+        });
+
+        if (resource.volume) {
+          resource.volume.setVolume(0.6);
         }
+
+        musicConnection.player.play(resource);
+        musicConnection.playing = true;
+
+        console.log(`Reproduciendo con play-dl: ${url}`);
+        return `🎵 Reproduciendo: **${url}**`;
+      } catch (playDlError) {
+        console.error('Error con play-dl:', playDlError);
       }
 
-      console.log(`Canción añadida a la cola: ${song.title}`);
-      musicConnection.queue.push(song);
-      
-      // Si no está reproduciendo actualmente, iniciar reproducción
-      if (!musicConnection.currentItem) {
-        console.log('No hay canción actual. Reproduciendo la primera de la cola...');
-        playNext(guildId);
-        return `🎵 Reproduciendo: **${song.title}**`;
-      } else {
-        console.log(`Canción actual: ${musicConnection.currentItem.title}. Añadiendo a la cola.`);
-        return `🎵 Añadido a la cola: **${song.title}**`;
+      // Intentar con youtube-dl-exec
+      try {
+        console.log('Intentando con youtube-dl-exec...');
+        const audioStream = await createYouTubeDlStream(url);
+
+        const resource = createAudioResource(audioStream, {
+          inputType: 'arbitrary',
+          inlineVolume: true
+        });
+
+        if (resource.volume) {
+          resource.volume.setVolume(0.6);
+        }
+
+        musicConnection.player.play(resource);
+        musicConnection.playing = true;
+
+        console.log(`Reproduciendo con youtube-dl-exec: ${url}`);
+        return `🎵 Reproduciendo: **${url}**`;
+      } catch (youtubeDlError) {
+        console.error('Error con youtube-dl-exec:', youtubeDlError);
       }
+
+      // Intentar con ytdl-core
+      try {
+        console.log('Intentando con ytdl-core...');
+        const stream = ytdl(url, {
+          filter: 'audioonly',
+          quality: 'highestaudio',
+          highWaterMark: 1 << 25
+        });
+
+        const resource = createAudioResource(stream, {
+          inputType: 'opus',
+          inlineVolume: true
+        });
+
+        if (resource.volume) {
+          resource.volume.setVolume(0.6);
+        }
+
+        musicConnection.player.play(resource);
+        musicConnection.playing = true;
+
+        console.log(`Reproduciendo con ytdl-core: ${url}`);
+        return `🎵 Reproduciendo: **${url}**`;
+      } catch (ytdlError) {
+        console.error('Error con ytdl-core:', ytdlError);
+      }
+
+      return '❌ No se pudo reproducir esta URL. Todas las herramientas fallaron.';
     } catch (error) {
-      console.error('Error al obtener información del video:', error);
-      return `❌ No se pudo reproducir esta URL. Error: ${error.message}`;
+      console.error('Error en playUrl:', error);
+      return `❌ Ocurrió un error al reproducir la música: ${error.message}`;
     }
   } catch (error) {
     console.error('Error en playUrl:', error);
