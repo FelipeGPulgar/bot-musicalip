@@ -1,5 +1,5 @@
 [phases.setup]
-commands = ["npm install --legacy-peer-deps"]
+commands = ["npm install"]
 
 [phases.build]
 commands = []
