@@ -34,7 +34,7 @@ const client = new Client({
 });
 
 // Configuración del bot
-const TOKEN = process.env.TOKEN;
+const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 
 // Almacenamiento para las conexiones de música
